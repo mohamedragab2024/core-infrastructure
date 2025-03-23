@@ -1,0 +1,59 @@
+name: Bootstrap Infrastructure
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'argocd/**'
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'latest'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure Kubernetes Config
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig
+          chmod 600 kubeconfig
+          
+      - name: Add Argo Helm repo
+        env:
+          KUBECONFIG: kubeconfig
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update
+
+      - name: Install ArgoCD
+        env:
+          KUBECONFIG: kubeconfig
+        run: |
+          helm upgrade --install argocd argo/argo-cd \
+            -n argocd \
+            -f ./argocd/argocd-values.yaml \
+            --create-namespace
+
+      - name: Wait for ArgoCD server
+        env:
+          KUBECONFIG: kubeconfig
+        run: |
+          kubectl wait --for=condition=available --timeout=600s deployment/argocd-server -n argocd || true
+
+      - name: Deploy App of Apps
+        env:
+          KUBECONFIG: kubeconfig
+        run: |
+          kubectl apply -f argocd/app-of-apps.yaml
