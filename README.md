@@ -4,7 +4,7 @@
 
 - clusters/ terraform
 - argocd values.yaml
-- apps  helmchart of core apps argocd applications
+- apps  helm chart to install core apps argocd applications
     - nginx
     - cert-manager
     - clusterIssuer
