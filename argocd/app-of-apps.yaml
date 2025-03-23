@@ -5,6 +5,10 @@ metadata:
   namespace: argocd
   finalizers:
   - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: app-of-apps
+    cloud-platform: eks
+    cloud-provider: civo
 spec:
   destination:
     namespace: argocd
