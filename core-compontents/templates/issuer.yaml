@@ -15,7 +15,7 @@ spec:
   source:
     path: clusterissuer
     repoURL: https://github.com/mohamedragab2024/core-infrastructure.git
-    targetRevision: master
+    targetRevision: main
   syncPolicy:
     automated:
       prune: true
