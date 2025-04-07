@@ -78,19 +78,66 @@ mkdir -p $CERT_DIR
 
 # Generate a root CA
 openssl genrsa -out $CERT_DIR/ca.key 4096
+# Create an openssl configuration file for the CA
+cat > $CERT_DIR/ca.cnf << EOL
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = Local Cluster CA
+
+[v3_req]
+basicConstraints = critical, CA:TRUE
+keyUsage = critical, digitalSignature, keyEncipherment, keyCertSign
+EOL
+
+# Generate CA certificate with CA:TRUE flag
 openssl req -x509 -new -nodes -key $CERT_DIR/ca.key -sha256 -days 3650 \
-  -out $CERT_DIR/ca.crt -subj "/CN=Local Cluster CA"
+  -out $CERT_DIR/ca.crt -config $CERT_DIR/ca.cnf -extensions v3_req
 
 # Generate a wildcard certificate for *.apps.local
 openssl genrsa -out $CERT_DIR/tls.key 2048
-openssl req -new -key $CERT_DIR/tls.key -out $CERT_DIR/tls.csr \
-  -subj "/CN=*.apps.local" \
-  -addext "subjectAltName = DNS:*.apps.local,DNS:apps.local"
 
-# Sign the certificate with our CA
+# Create an openssl configuration file for the wildcard cert
+cat > $CERT_DIR/cert.cnf << EOL
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = *.apps.local
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = *.apps.local
+DNS.2 = apps.local
+EOL
+
+# Generate CSR with the configuration
+openssl req -new -key $CERT_DIR/tls.key -out $CERT_DIR/tls.csr -config $CERT_DIR/cert.cnf
+
+# Create an openssl extension file for signing
+cat > $CERT_DIR/cert.ext << EOL
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = *.apps.local
+DNS.2 = apps.local
+EOL
+
+# Sign the certificate with our CA using the extension file
 openssl x509 -req -in $CERT_DIR/tls.csr -CA $CERT_DIR/ca.crt -CAkey $CERT_DIR/ca.key \
-  -CAcreateserial -out $CERT_DIR/tls.crt -days 365 -sha256 \
-  -extfile <(printf "subjectAltName=DNS:*.apps.local,DNS:apps.local")
+  -CAcreateserial -out $CERT_DIR/tls.crt -days 365 -sha256 -extfile $CERT_DIR/cert.ext
 
 # Create cert-manager namespace
 echo "Creating cert-manager namespace"
@@ -101,15 +148,11 @@ echo "Creating CA TLS secret for cert-manager"
 kubectl create secret tls ca-key-pair \
   --cert=$CERT_DIR/ca.crt \
   --key=$CERT_DIR/ca.key \
-  --namespace=cert-manager
+  --namespace=cert-manager --dry-run=client -o yaml | kubectl apply -f -
 
-# Create wildcard certificate TLS secret
-echo "Creating wildcard certificate TLS secret"
-kubectl create secret tls wildcard-apps-local-tls \
-  --cert=$CERT_DIR/tls.crt \
-  --key=$CERT_DIR/tls.key \
-  --namespace=cert-manager
-
+# Verify the CA certificate has CA flag set
+echo "Verifying CA certificate has proper CA flag..."
+openssl x509 -in $CERT_DIR/ca.crt -text -noout | grep -A1 "X509v3 Basic Constraints"
 
 # Deploy argocd 
 helm repo add argo https://argoproj.github.io/argo-helm
