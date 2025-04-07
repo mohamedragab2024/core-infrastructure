@@ -71,22 +71,49 @@ echo "${KUBE_CONFIG}" >> ~/.kube/k3sconfig
 yq e -i '.clusters[0].cluster.server="https://'"${MASTET_NODE_IP}"':6443"' ~/.kube/k3sconfig
 echo "Kubeconfig file saved to ~/.kube/k3sconfig"
 
-# Generate SSL certificate for LB
-echo "Generating SSL certificate sa key"
-openssl genrsa -out /tmp/tls.key 4096
-openssl req -new -x509 -newkey -sha256 -key /tmp/tls.key -out /tmp/ca.crt -days 3650"
-# trust the certificate on macos
-echo "Trusting the certificate on macOS"
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /tmp/ca.crt
+# Generate SSL certificate for *.apps.local domain
+echo "Generating SSL certificates for *.apps.local"
+CERT_DIR=~/certs
+mkdir -p $CERT_DIR
 
-# Create k8s secret for SSL certificate
-echo "Creating k8s secret for SSL certificate"
-kubectl config set-context default
-kubectl create secret tls lb-tls-secret --cert=/tmp/ca.crt --key=/tmp/tls.key
+# Generate a root CA
+openssl genrsa -out $CERT_DIR/ca.key 4096
+openssl req -x509 -new -nodes -key $CERT_DIR/ca.key -sha256 -days 3650 \
+  -out $CERT_DIR/ca.crt -subj "/CN=Local Cluster CA"
+
+# Generate a wildcard certificate for *.apps.local
+openssl genrsa -out $CERT_DIR/tls.key 2048
+openssl req -new -key $CERT_DIR/tls.key -out $CERT_DIR/tls.csr \
+  -subj "/CN=*.apps.local" \
+  -addext "subjectAltName = DNS:*.apps.local,DNS:apps.local"
+
+# Sign the certificate with our CA
+openssl x509 -req -in $CERT_DIR/tls.csr -CA $CERT_DIR/ca.crt -CAkey $CERT_DIR/ca.key \
+  -CAcreateserial -out $CERT_DIR/tls.crt -days 365 -sha256 \
+  -extfile <(printf "subjectAltName=DNS:*.apps.local,DNS:apps.local")
+
+# Create cert-manager namespace
+echo "Creating cert-manager namespace"
+kubectl create namespace cert-manager --dry-run=client -o yaml | kubectl apply -f -
+
+# Create CA TLS secret for cert-manager
+echo "Creating CA TLS secret for cert-manager"
+kubectl create secret tls ca-key-pair \
+  --cert=$CERT_DIR/ca.crt \
+  --key=$CERT_DIR/ca.key \
+  --namespace=cert-manager
+
+# Create wildcard certificate TLS secret
+echo "Creating wildcard certificate TLS secret"
+kubectl create secret tls wildcard-apps-local-tls \
+  --cert=$CERT_DIR/tls.crt \
+  --key=$CERT_DIR/tls.key \
+  --namespace=cert-manager
+
 
 # Deploy argocd 
 helm repo add argo https://argoproj.github.io/argo-helm
-helm repo updateq
+helm repo update
 echo "Installing ArgoCD..."
 helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace -f "https://raw.githubusercontent.com/mohamedragab2024/core-infrastructure/refs/heads/main/argocd/argocd-values-local.yaml"
 echo "Waiting for the service to be ready..."      

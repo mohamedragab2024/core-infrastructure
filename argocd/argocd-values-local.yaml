@@ -2250,7 +2250,7 @@ server:
 
     # -- Argo CD server hostname
     # @default -- `""` (defaults to global.domain)
-    hostname: "argocd.local"
+    hostname: "argocd.apps.local"
 
     # -- The path to Argo CD server
     path: /
