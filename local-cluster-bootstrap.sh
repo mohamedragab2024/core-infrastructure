@@ -154,6 +154,17 @@ kubectl create secret tls ca-key-pair \
 echo "Verifying CA certificate has proper CA flag..."
 openssl x509 -in $CERT_DIR/ca.crt -text -noout | grep -A1 "X509v3 Basic Constraints"
 
+# trust the CA certificate on macos
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "Trusting CA certificate on macOS..."
+  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain $CERT_DIR/ca.crt
+fi
+# trust the CA certificate on linux
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+  echo "Trusting CA certificate on Linux..."
+  sudo cp $CERT_DIR/ca.crt /usr/local/share/ca-certificates/ca.crt
+  sudo update-ca-certificates
+fi
 # Deploy argocd 
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
@@ -166,3 +177,14 @@ echo "ArgoCD is ready!"
 # deploy core apps
 kubectl apply -f "https://raw.githubusercontent.com/mohamedragab2024/core-infrastructure/refs/heads/main/argocd/app-of-apps.yaml"
 echo "Core apps are deployed!"
+
+
+echo "Waiting for nginx-ingress to be ready..."
+kubectl wait --for=jsonpath="{.status.phase}"=Active namespace/ingress-nginx --timeout=600s
+kubectl wait --for=condition=available --timeout=600s deployment/nginx-ingress-controller -n ingress-nginx
+
+echo "All ArgoCD applications are synced and healthy!"
+
+# Display the ArgoCD URL
+echo "ArgoCD URL: https://argocd.apps.local"
+echo "ArgoCD admin password: $(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode)"
