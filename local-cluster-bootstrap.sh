@@ -1,5 +1,10 @@
 #!/bin/bash
-# CLean up 
+# Check multipass installation
+if ! command -v multipass &> /dev/null
+then
+    echo "Multipass could not be found. Please install it first. https://canonical.com/multipass/install"
+    exit
+fi 
 # Remove existing nodes
 multipass delete --all
 multipass purge
