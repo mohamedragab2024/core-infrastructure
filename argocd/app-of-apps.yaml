@@ -7,8 +7,8 @@ metadata:
   - resources-finalizer.argocd.argoproj.io
   labels:
     app.kubernetes.io/name: app-of-apps
-    cloud-platform: eks
-    cloud-provider: civo
+    cloud-platform: local-k3s
+    cloud-provider: local
 spec:
   destination:
     namespace: argocd
