@@ -178,13 +178,22 @@ echo "ArgoCD is ready!"
 kubectl apply -f "https://raw.githubusercontent.com/mohamedragab2024/core-infrastructure/refs/heads/main/argocd/app-of-apps.yaml"
 echo "Core apps are deployed!"
 
+# Sleep for a few seconds to allow the apps to sync
+sleep 100
 
-echo "Waiting for nginx-ingress to be ready..."
-kubectl wait --for=jsonpath="{.status.phase}"=Active namespace/ingress-nginx --timeout=600s
+# Wait until nginx-ingress is created
 kubectl wait --for=condition=available --timeout=600s deployment/nginx-ingress-controller -n ingress-nginx
+
+
 
 echo "All ArgoCD applications are synced and healthy!"
 
 # Display the ArgoCD URL
 echo "ArgoCD URL: https://argocd.apps.local"
 echo "ArgoCD admin password: $(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode)"
+
+# Add argocd domain to /etc/hosts
+echo "Please argocd domain to /etc/hosts... with IP ${(kubectl get service ingress-nginx-controller -n ingress-nginx -o yaml | yq '.status.loadBalancer.ingress[].ip')}"
+
+# If you are using macos and certificate is not trusted, you can use the following command to trust it
+# sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/certs/ca.crt
