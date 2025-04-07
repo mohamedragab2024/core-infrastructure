@@ -4,4 +4,4 @@ metadata:
   name: local-issuer
 spec:
   ca:
-    secretName: lb-tls-secret
+    secretName: ca-key-pair
