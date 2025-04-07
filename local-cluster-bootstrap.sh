@@ -200,5 +200,5 @@ echo "ArgoCD admin password: $(kubectl get secret argocd-initial-admin-secret -n
 # Add argocd domain to /etc/hosts
 echo "Please add argocd domain to /etc/hosts... with IP ${(kubectl get service ingress-nginx-controller -n ingress-nginx -o yaml | yq '.status.loadBalancer.ingress[].ip')}"
 
-# If you are using macos and certificate is not trusted, you can use the following command to trust it
-# sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/certs/ca.crt
+echo "If you are using macos and certificate is not trusted, you can use the following command to trust it"
+echo  "sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/certs/ca.crt"
