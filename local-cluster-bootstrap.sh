@@ -4,7 +4,9 @@ if ! command -v multipass &> /dev/null
 then
     echo "Multipass could not be found. Please install it first. https://canonical.com/multipass/install"
     exit
-fi 
+fi
+network=$1
+
 # Remove existing nodes
 multipass delete --all
 multipass purge
@@ -14,7 +16,11 @@ WORKER_NODES=("k3s-worker1" "k3s-worker2")
 
 # Create master node
 echo "Creating master node..."
-multipass launch --name ${MASTER_NODE} --cpus 2 --memory 2G --disk 10G
+if [[ -z "$network" ]]; then
+    multipass launch --name ${MASTER_NODE} --cpus 2 --memory 2G --disk 10G
+else
+    multipass launch --name ${MASTER_NODE} --cpus 2 --memory 2G --disk 10G --network $network
+fi
 multipass exec ${MASTER_NODE} -- bash -c "curl -sfL https://get.k3s.io | sh -s - --disable=servicelb --disable=traefik"
 
 # Get k3s token
@@ -26,7 +32,11 @@ KUBE_CONFIG=$(multipass exec ${MASTER_NODE} -- bash -c "sudo cat /etc/rancher/k3
 # Create worker nodes
 for WORKER_NODE in "${WORKER_NODES[@]}"; do
     echo "Creating worker node ${WORKER_NODE}..."
-    multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G
+    if [[ -n "$network" ]]; then
+        multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G --network $network
+    else
+        multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G
+    fi
     multipass exec ${WORKER_NODE} -- bash -c "curl -sfL https://get.k3s.io | K3S_URL=https://${MASTET_NODE_IP}:6443 K3S_TOKEN=${MASTER_NODE_TOKEN} sh -"
 done
 # Wait for all nodes to be ready
@@ -39,8 +49,20 @@ done
 echo "Installing MetalLB on master node..."
 multipass exec ${MASTER_NODE} -- bash -c "sudo kubectl create namespace metallb-system || true"
 multipass exec ${MASTER_NODE} -- bash -c "sudo kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml" -n metallb-system
+# Get the network Ip range 
+# if network is not provided, get the network IP range from the network interface
+# if network is provided, use the the multipass network interface
+dhcp=""
+if [[ -z "$network" ]]; then
+    dhcp=$(multipass info ${MASTER_NODE} | grep -i ip | awk '{print $2}' | cut -d '.' -f 1-3)
+else
+    dhcp=$(ifconfig $network | grep "inet " | awk '{print $2}' | cut -d '.' -f 1-3)
+fi
+ipRange=${dhcp}.110-${dhcp}.200
+
 # Configure MetalLB
 echo "Configuring MetalLB..."
+
 multipass exec ${MASTER_NODE} -- bash -c "sudo kubectl delete validatingwebhookconfigurations metallb-webhook-configuration"
 multipass exec ${MASTER_NODE} -- bash -c "sudo kubectl apply -n metallb-system -f - <<EOF
 apiVersion: metallb.io/v1beta1
@@ -50,7 +72,7 @@ metadata:
   namespace: metallb-system
 spec:
  addresses:
-  - 192.168.64.110-192.168.64.200
+  - $ipRange
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
