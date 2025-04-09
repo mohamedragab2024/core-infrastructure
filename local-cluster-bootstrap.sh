@@ -97,7 +97,8 @@ mkdir -p ~/.kube || true
 echo "${KUBE_CONFIG}" >> ~/.kube/k3sconfig
 yq e -i '.clusters[0].cluster.server="https://'"${MASTET_NODE_IP}"':6443"' ~/.kube/k3sconfig
 echo "Kubeconfig file saved to ~/.kube/k3sconfig"
-
+export KUBECONFIG=$KUBECONFIG:~/.kube/k3sconfig
+kubectl config use-context default
 # Generate SSL certificate for *.apps.local domain
 echo "Generating SSL certificates for *.apps.local"
 CERT_DIR=~/certs
