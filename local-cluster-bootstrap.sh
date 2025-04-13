@@ -26,7 +26,7 @@ multipass exec ${MASTER_NODE} -- bash -c "curl -sfL https://get.k3s.io | sh -s -
 # Get k3s token
 MASTER_NODE_TOKEN=$(multipass exec ${MASTER_NODE} sudo cat /var/lib/rancher/k3s/server/node-token)
 MASTET_NODE_IP=$(multipass info ${MASTER_NODE} | grep -i ip | awk '{print $2}')
-# Apply network config to master
+# Get kubeconfig
 KUBE_CONFIG=$(multipass exec ${MASTER_NODE} -- bash -c "sudo cat /etc/rancher/k3s/k3s.yaml")
 
 # Create worker nodes
