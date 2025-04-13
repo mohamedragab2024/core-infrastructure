@@ -1,5 +1,7 @@
 # core-infrastructure
 
+<img width="1907" alt="Screenshot 2025-04-12 at 12 34 45" src="https://github.com/user-attachments/assets/2e261e37-2ea5-43ce-90b2-f4d4f4a6ab3c" />
+
 ## Folders 
 
 - clusters/ terraform
