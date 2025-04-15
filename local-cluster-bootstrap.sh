@@ -212,7 +212,7 @@ echo "ArgoCD is ready!"
 kubectl apply -f "https://raw.githubusercontent.com/mohamedragab2024/core-infrastructure/refs/heads/main/argocd/app-of-apps.yaml"
 echo "Core apps are deployed!"
 
-
+kubectl wait application/app-of-apps -n argocd --for=condition=Synced=True,condition=Healthy=True --timeout=600s
 # Wait until nginx-ingress is created
 kubectl wait --for=condition=available --timeout=600s deployment/nginx-ingress-controller -n ingress-nginx
 
