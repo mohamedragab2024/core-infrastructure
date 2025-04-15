@@ -6,13 +6,13 @@ then
     exit
 fi
 network=$1
-
 # Remove existing nodes
 multipass delete --all
 multipass purge
 # Configuration variables
 MASTER_NODE="k3s-master"
-WORKER_NODES=("k3s-worker1" "k3s-worker2")
+# Worker nodes count by default 0 only create cluster with master node
+WORKER_NODES_COUNT=${2:-0}
 
 # Create master node
 echo "Creating master node..."
@@ -30,20 +30,26 @@ MASTET_NODE_IP=$(multipass info ${MASTER_NODE} | grep -i ip | awk '{print $2}')
 KUBE_CONFIG=$(multipass exec ${MASTER_NODE} -- bash -c "sudo cat /etc/rancher/k3s/k3s.yaml")
 
 # Create worker nodes
-for WORKER_NODE in "${WORKER_NODES[@]}"; do
+if [[ ${WORKER_NODES_COUNT} -eq 0 ]]; then
+  echo "No worker nodes to create. Proceeding with master node only..."
+else
+  for i in $(seq 1 ${WORKER_NODES_COUNT}); do
+    WORKER_NODE="k3s-worker-${i}"
     echo "Creating worker node ${WORKER_NODE}..."
     if [[ -n "$network" ]]; then
-        multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G --network $network
+      multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G --network $network
     else
-        multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G
+      multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G
     fi
     multipass exec ${WORKER_NODE} -- bash -c "curl -sfL https://get.k3s.io | K3S_URL=https://${MASTET_NODE_IP}:6443 K3S_TOKEN=${MASTER_NODE_TOKEN} sh -"
-done
-# Wait for all nodes to be ready
-echo "Waiting for all nodes to be ready..."
-for WORKER_NODE in "${WORKER_NODES[@]}"; do
+  done
+  # Wait for all nodes to be ready
+  echo "Waiting for all nodes to be ready..."
+  for i in $(seq 1 ${WORKER_NODES_COUNT}); do
+    WORKER_NODE="k3s-worker-${i}"
     multipass exec ${MASTER_NODE} -- bash -c "while ! sudo kubectl get nodes $WORKER_NODE | grep -q 'Ready'; do sleep 5; done"
-done
+  done
+fi
 
 # Install metalLB on master
 echo "Installing MetalLB on master node..."
@@ -206,8 +212,6 @@ echo "ArgoCD is ready!"
 kubectl apply -f "https://raw.githubusercontent.com/mohamedragab2024/core-infrastructure/refs/heads/main/argocd/app-of-apps.yaml"
 echo "Core apps are deployed!"
 
-# Sleep for a few seconds to allow the apps to sync
-sleep 100
 
 # Wait until nginx-ingress is created
 kubectl wait --for=condition=available --timeout=600s deployment/nginx-ingress-controller -n ingress-nginx
