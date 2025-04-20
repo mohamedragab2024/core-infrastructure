@@ -18,6 +18,8 @@ spec:
     chart: victoria-metrics-k8s-stack
     helm:
       valuesObject:
+        defaultDashboards:
+          enabled: false
         admissionWebhooks:
           enabled: true
           certManager:
@@ -144,4 +146,3 @@ spec:
       allowEmpty: false
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
