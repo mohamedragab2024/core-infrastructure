@@ -243,8 +243,11 @@ while true; do
 done
 
 # Wait until nginx-ingress is created
-echo "Wit for nginx to be deployed"
-
+echo "wait for nginx to be deployed"
+while ! kubectl get deployment nginx-ingress-controller -n ingress-nginx &>/dev/null; do
+  echo "Waiting for nginx-ingress-controller deployment to be created..."
+  sleep 5
+done
 kubectl wait --for=condition=available --timeout=600s deployment/nginx-ingress-controller -n ingress-nginx
 
 
