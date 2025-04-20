@@ -18,6 +18,10 @@ spec:
     chart: victoria-metrics-k8s-stack
     helm:
       valuesObject:
+        admissionWebhooks:
+          enabled: true
+          certManager:
+           enabled: true
         nameOverride: "vm"
         fullnameOverride: "vm"
         # Default values for Victoria Metrics Stack
@@ -42,6 +46,7 @@ spec:
         # Configure Victoria Metrics components
         victoria-metrics-operator:
           enabled: true
+
         
         # Add VMAgent for metrics collection
         vmagent:
