@@ -9,7 +9,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
 spec:
   destination:
-    namespace: monitoring
+    namespace: metrics
     server: https://kubernetes.default.svc
   project: default
   source:
