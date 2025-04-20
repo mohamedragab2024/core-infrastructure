@@ -69,6 +69,8 @@ spec:
         # Enable VMCluster for scalability and high availability
         vmcluster:
           enabled: true
+          # Use shorter nameOverride to avoid exceeding the 63-character limit
+          nameOverride: "vm"
           # VMStorage is responsible for storing the metrics
           vmselect:
             replicaCount: 2
