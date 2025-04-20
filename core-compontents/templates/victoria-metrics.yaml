@@ -19,6 +19,7 @@ spec:
     helm:
       valuesObject:
        nameOverride: "vm"
+       fullnameOverride: "vm"
         # Default values for Victoria Metrics Stack
         # Modified based on https://github.com/VictoriaMetrics/helm-charts/blob/master/charts/victoria-metrics-k8s-stack/values.yaml
         kubeApiServer:
