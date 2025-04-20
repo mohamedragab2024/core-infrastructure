@@ -5,27 +5,74 @@ then
     echo "Multipass could not be found. Please install it first. https://canonical.com/multipass/install"
     exit
 fi
-network=$1
+
+# Default values
+NETWORK=""
+WORKER_NODES_COUNT=0
+MASTER_CPU=2
+MASTER_MEMORY="2G"
+WORKER_CPU=2
+WORKER_MEMORY="2G"
+DISK_SIZE="10G"
+
+# Parse named arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --network) NETWORK="$2"; shift ;;
+        --workers) WORKER_NODES_COUNT="$2"; shift ;;
+        --master-cpu) MASTER_CPU="$2"; shift ;;
+        --master-memory) MASTER_MEMORY="$2"; shift ;;
+        --worker-cpu) WORKER_CPU="$2"; shift ;;
+        --worker-memory) WORKER_MEMORY="$2"; shift ;;
+        --disk) DISK_SIZE="$2"; shift ;;
+        --help)
+            echo "Usage: $0 [options]"
+            echo "Options:"
+            echo "  --network NETWORK        Specify the network interface to use"
+            echo "  --workers COUNT          Number of worker nodes (default: 0)"
+            echo "  --master-cpu COUNT       CPU cores for master node (default: 2)"
+            echo "  --master-memory SIZE     Memory for master node (default: 2G)"
+            echo "  --worker-cpu COUNT       CPU cores for worker nodes (default: 2)"
+            echo "  --worker-memory SIZE     Memory for worker nodes (default: 2G)"
+            echo "  --disk SIZE              Disk size for all nodes (default: 10G)"
+            echo "  --help                   Display this help message"
+            exit 0
+            ;;
+        *) echo "Unknown parameter: $1"; echo "Use --help for usage information"; exit 1 ;;
+    esac
+    shift
+done
+
+# Display configuration
+echo "Cluster configuration:"
+echo "- Master node: CPU:${MASTER_CPU}, Memory:${MASTER_MEMORY}, Disk:${DISK_SIZE}"
+if [[ ${WORKER_NODES_COUNT} -gt 0 ]]; then
+  echo "- Worker nodes: ${WORKER_NODES_COUNT} node(s), CPU:${WORKER_CPU}, Memory:${WORKER_MEMORY}, Disk:${DISK_SIZE}"
+fi
+if [[ -n "$NETWORK" ]]; then
+  echo "- Network: ${NETWORK}"
+fi
+echo ""
+
 # Remove existing nodes
 multipass delete --all
 multipass purge
 
 # Define node names
 MASTER_NODE="k3s-master"
-WORKER_NODES_COUNT=${2:-0}
 
 # Create master node
 echo "Creating master node..."
-if [[ -z "$network" ]]; then
-    multipass launch --name ${MASTER_NODE} --cpus 2 --memory 2G --disk 10G
+if [[ -z "$NETWORK" ]]; then
+    multipass launch --name ${MASTER_NODE} --cpus ${MASTER_CPU} --memory ${MASTER_MEMORY} --disk ${DISK_SIZE}
 else
-    multipass launch --name ${MASTER_NODE} --cpus 2 --memory 2G --disk 10G --network $network
+    multipass launch --name ${MASTER_NODE} --cpus ${MASTER_CPU} --memory ${MASTER_MEMORY} --disk ${DISK_SIZE} --network $NETWORK
 fi
 multipass exec ${MASTER_NODE} -- bash -c "curl -sfL https://get.k3s.io | sh -s - --disable=servicelb --disable=traefik"
 
 # Get k3s token
 MASTER_NODE_TOKEN=$(multipass exec ${MASTER_NODE} sudo cat /var/lib/rancher/k3s/server/node-token)
-MASTET_NODE_IP=$(multipass info ${MASTER_NODE} | grep -i ip | awk '{print $2}')
+MASTER_NODE_IP=$(multipass info ${MASTER_NODE} | grep -i ip | awk '{print $2}')
 # Get kubeconfig
 KUBE_CONFIG=$(multipass exec ${MASTER_NODE} -- bash -c "sudo cat /etc/rancher/k3s/k3s.yaml")
 
@@ -36,12 +83,12 @@ else
   for i in $(seq 1 ${WORKER_NODES_COUNT}); do
     WORKER_NODE="k3s-worker-${i}"
     echo "Creating worker node ${WORKER_NODE}..."
-    if [[ -n "$network" ]]; then
-      multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G --network $network
+    if [[ -n "$NETWORK" ]]; then
+      multipass launch --name ${WORKER_NODE} --cpus ${WORKER_CPU} --memory ${WORKER_MEMORY} --disk ${DISK_SIZE} --network $NETWORK
     else
-      multipass launch --name ${WORKER_NODE} --cpus 2 --memory 2G --disk 10G
+      multipass launch --name ${WORKER_NODE} --cpus ${WORKER_CPU} --memory ${WORKER_MEMORY} --disk ${DISK_SIZE}
     fi
-    multipass exec ${WORKER_NODE} -- bash -c "curl -sfL https://get.k3s.io | K3S_URL=https://${MASTET_NODE_IP}:6443 K3S_TOKEN=${MASTER_NODE_TOKEN} sh -"
+    multipass exec ${WORKER_NODE} -- bash -c "curl -sfL https://get.k3s.io | K3S_URL=https://${MASTER_NODE_IP}:6443 K3S_TOKEN=${MASTER_NODE_TOKEN} sh -"
   done
   # Wait for all nodes to be ready
   echo "Waiting for all nodes to be ready..."
@@ -59,10 +106,10 @@ multipass exec ${MASTER_NODE} -- bash -c "sudo kubectl apply -f https://raw.gith
 # if network is not provided, get the network IP range from the network interface
 # if network is provided, use the the multipass network interface
 dhcp=""
-if [[ -z "$network" ]]; then
+if [[ -z "$NETWORK" ]]; then
     dhcp=$(multipass info ${MASTER_NODE} | grep -i ip | awk '{print $2}' | cut -d '.' -f 1-3)
 else
-    dhcp=$(ifconfig $network | grep "inet " | awk '{print $2}' | cut -d '.' -f 1-3)
+    dhcp=$(ifconfig $NETWORK | grep "inet " | awk '{print $2}' | cut -d '.' -f 1-3)
 fi
 ipRange=${dhcp}.110-${dhcp}.200
 
@@ -93,18 +140,21 @@ EOF
 # Wait for MetalLB to be ready
 echo "Waiting for MetalLB to be ready..."
 multipass exec ${MASTER_NODE} -- bash -c "while ! sudo kubectl get pods -n metallb-system | grep -q 'Running'; do sleep 5; done"
+
 # Display the cluster information
 echo "Cluster information:"
 multipass exec ${MASTER_NODE} -- bash -c "sudo kubectl get nodes"
 echo "Cluster is ready!"
+
 # Display the kubeconfig file
 echo "create Kubeconfig file:"
 mkdir -p ~/.kube || true
 echo "${KUBE_CONFIG}" >> ~/.kube/k3sconfig
-yq e -i '.clusters[0].cluster.server="https://'"${MASTET_NODE_IP}"':6443"' ~/.kube/k3sconfig
+yq e -i '.clusters[0].cluster.server="https://'"${MASTER_NODE_IP}"':6443"' ~/.kube/k3sconfig
 echo "Kubeconfig file saved to ~/.kube/k3sconfig"
 export KUBECONFIG=$KUBECONFIG:~/.kube/k3sconfig
 kubectl config use-context default
+
 # Generate SSL certificate for *.apps.local domain
 echo "Generating SSL certificates for *.apps.local"
 CERT_DIR=~/certs
@@ -189,10 +239,8 @@ echo "Verifying CA certificate has proper CA flag..."
 openssl x509 -in $CERT_DIR/ca.crt -text -noout | grep -A1 "X509v3 Basic Constraints"
 
 # trust the CA certificate on macos
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  echo "Trusting CA certificate on macOS..."
-  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain $CERT_DIR/ca.crt
-fi
+# For simplicty let the user run the command as it requires permission
+
 # trust the CA certificate on linux
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
   echo "Trusting CA certificate on Linux..."
@@ -244,11 +292,16 @@ done
 
 # Wait until nginx-ingress is created
 echo "wait for nginx to be deployed"
-while ! kubectl get deployment nginx-ingress-controller -n ingress-nginx &>/dev/null; do
-  echo "Waiting for nginx-ingress-controller deployment to be created..."
+while ! kubectl get namespace ingress-nginx &>/dev/null; do
+  echo "wait for nginx to be deployed"
   sleep 5
 done
-kubectl wait --for=condition=available --timeout=600s deployment/nginx-ingress-controller -n ingress-nginx
+echo "wait for nginx to be deployed"
+while ! kubectl get deployment ingress-nginx-controller -n ingress-nginx &>/dev/null; do
+  echo "wait for nginx to be deployed"
+  sleep 5
+done
+kubectl wait --for=condition=available --timeout=600s deployment/ingress-nginx-controller -n ingress-nginx
 
 
 
