@@ -9,9 +9,9 @@ network=$1
 # Remove existing nodes
 multipass delete --all
 multipass purge
-# Configuration variables
+
+# Define node names
 MASTER_NODE="k3s-master"
-# Worker nodes count by default 0 only create cluster with master node
 WORKER_NODES_COUNT=${2:-0}
 
 # Create master node
@@ -212,8 +212,13 @@ echo "ArgoCD is ready!"
 kubectl apply -f "https://raw.githubusercontent.com/mohamedragab2024/core-infrastructure/refs/heads/main/argocd/app-of-apps.yaml"
 echo "Core apps are deployed!"
 
+echo "Wait for app of apps to be synced"
+
 kubectl wait application/app-of-apps -n argocd --for=condition=Synced=True,condition=Healthy=True --timeout=600s
+
 # Wait until nginx-ingress is created
+echo "Wit for nginx to be deployed"
+
 kubectl wait --for=condition=available --timeout=600s deployment/nginx-ingress-controller -n ingress-nginx
 
 
