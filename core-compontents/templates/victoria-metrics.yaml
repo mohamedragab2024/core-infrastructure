@@ -18,6 +18,7 @@ spec:
     chart: victoria-metrics-k8s-stack
     helm:
       valuesObject:
+       nameOverride: "vm"
         # Default values for Victoria Metrics Stack
         # Modified based on https://github.com/VictoriaMetrics/helm-charts/blob/master/charts/victoria-metrics-k8s-stack/values.yaml
         kubeApiServer:
@@ -69,8 +70,6 @@ spec:
         # Enable VMCluster for scalability and high availability
         vmcluster:
           enabled: true
-          # Use shorter nameOverride to avoid exceeding the 63-character limit
-          nameOverride: "vm"
           # VMStorage is responsible for storing the metrics
           vmselect:
             replicaCount: 2
