@@ -214,7 +214,33 @@ echo "Core apps are deployed!"
 
 echo "Wait for app of apps to be synced"
 
-kubectl wait application/app-of-apps -n argocd --for=condition=Synced=True,condition=Healthy=True --timeout=600s
+# Argocd application is CRDS which is not support waiting for it to be ready
+echo "Waiting for app-of-apps to be synced and healthy (this may take a few minutes)..."
+timeout=600
+start_time=$(date +%s)
+while true; do
+  # Get the sync and health status
+  sync_status=$(kubectl get application app-of-apps -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null)
+  health_status=$(kubectl get application app-of-apps -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null)
+  
+  # Check if we have the desired status
+  if [[ "$sync_status" == "Synced" && "$health_status" == "Healthy" ]]; then
+    echo "✅ app-of-apps is now Synced and Healthy!"
+    break
+  fi
+  
+  # Check if timeout has been reached
+  current_time=$(date +%s)
+  elapsed_time=$((current_time - start_time))
+  if [[ $elapsed_time -ge $timeout ]]; then
+    echo "⚠️ Timeout waiting for app-of-apps to be Synced and Healthy. Current status: Sync=$sync_status, Health=$health_status"
+    echo "Continuing with the bootstrap process anyway..."
+    break
+  fi
+  
+  echo "Current status: Sync=$sync_status, Health=$health_status. Waiting..."
+  sleep 10
+done
 
 # Wait until nginx-ingress is created
 echo "Wit for nginx to be deployed"
