@@ -1,0 +1,171 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: victoria-metrics
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  destination:
+    namespace: monitoring
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://victoriametrics.github.io/helm-charts/
+    targetRevision: 0.18.6
+    chart: victoria-metrics-k8s-stack
+    helm:
+      valuesObject:
+        # Default values for Victoria Metrics Stack
+        # Modified based on https://github.com/VictoriaMetrics/helm-charts/blob/master/charts/victoria-metrics-k8s-stack/values.yaml
+        kubeApiServer:
+          enabled: true
+        
+        # Enable default ServiceMonitors
+        kubelet:
+          enabled: true
+        kubeControllerManager:
+          enabled: true
+        coreDns:
+          enabled: true
+        kubeEtcd:
+          enabled: false
+        kubeScheduler:
+          enabled: true
+        kubeProxy:
+          enabled: true
+          
+        # Configure Victoria Metrics components
+        victoria-metrics-operator:
+          enabled: true
+        
+        # Add VMAgent for metrics collection
+        vmagent:
+          enabled: true
+          spec:
+            serviceScrapeNamespaceSelector: {}
+            serviceScrapeSelector: {}
+            podScrapeNamespaceSelector: {}
+            podScrapeSelector: {}
+            probeNamespaceSelector: {}
+            probeSelector: {}
+            staticScrapeNamespaceSelector: {}
+            staticScrapeSelector: {}
+            replicaCount: 1
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "200m"
+              limits:
+                memory: "512Mi"
+                cpu: "400m"
+        
+        # Disable VMSingle in favor of VMCluster for high availability
+        vmsingle:
+          enabled: false
+        
+        # Enable VMCluster for scalability and high availability
+        vmcluster:
+          enabled: true
+          # VMStorage is responsible for storing the metrics
+          vmselect:
+            replicaCount: 2
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "200m"
+              limits:
+                memory: "1Gi"
+                cpu: "400m"
+          # VMInsert is responsible for ingesting metrics
+          vminsert:
+            replicaCount: 2
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "200m"
+              limits:
+                memory: "512Mi"
+                cpu: "400m"
+          # VMStorage is the storage layer
+          vmstorage:
+            replicaCount: 2
+            retentionPeriod: "30d"
+            resources:
+              requests:
+                memory: "1Gi" 
+                cpu: "250m"
+              limits:
+                memory: "2Gi"
+                cpu: "500m"
+            storage:
+              accessModes:
+                - ReadWriteOnce
+              size: 10Gi
+        
+        vmalert:
+          enabled: true
+          spec:
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+        
+        # Configure Grafana with dashboards
+        grafana:
+          enabled: true
+          adminPassword: "admin"
+          ingress:
+            enabled: false
+          sidecar:
+            dashboards:
+              enabled: true
+              searchNamespace: ALL
+          defaultDashboardsEnabled: true
+          defaultDashboardsTimezone: "UTC"
+          
+        # Alert manager for handling notifications
+        alertmanager:
+          enabled: true
+          spec:
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+        
+        defaultRules:
+          create: true
+          rules:
+            alertmanager: true
+            etcd: true
+            general: true
+            k8s: true
+            kubeApiserver: true
+            kubePrometheusNodeAlerting: true
+            kubePrometheusNode: true
+            kubernetesAbsent: true
+            kubernetesApps: true
+            kubernetesResources: true
+            kubernetesStorage: true
+            kubernetesSystem: true
+            prometheus: true
+            vmagent: true
+            vmalert: true
+            vmcluster: true
+            vmsingle: true
+        
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
