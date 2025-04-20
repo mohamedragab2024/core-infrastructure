@@ -64,36 +64,10 @@ spec:
                 memory: "512Mi"
                 cpu: "400m"
         
-        # Disable VMSingle in favor of VMCluster for high availability
+        # Enable VMSingle for metrics storage
         vmsingle:
-          enabled: false
-        
-        # Enable VMCluster for scalability and high availability
-        vmcluster:
           enabled: true
-          # VMStorage is responsible for storing the metrics
-          vmselect:
-            replicaCount: 2
-            resources:
-              requests:
-                memory: "512Mi"
-                cpu: "200m"
-              limits:
-                memory: "1Gi"
-                cpu: "400m"
-          # VMInsert is responsible for ingesting metrics
-          vminsert:
-            replicaCount: 2
-            resources:
-              requests:
-                memory: "256Mi"
-                cpu: "200m"
-              limits:
-                memory: "512Mi"
-                cpu: "400m"
-          # VMStorage is the storage layer
-          vmstorage:
-            replicaCount: 2
+          spec:
             retentionPeriod: "30d"
             resources:
               requests:
@@ -106,6 +80,10 @@ spec:
               accessModes:
                 - ReadWriteOnce
               size: 10Gi
+        
+        # Disable VMCluster as we're using VMSingle instead
+        vmcluster:
+          enabled: false
         
         vmalert:
           enabled: true
