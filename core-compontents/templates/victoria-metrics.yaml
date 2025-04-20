@@ -98,35 +98,7 @@ spec:
         
         # Configure Grafana with dashboards
         grafana:
-          enabled: true
-          adminPassword: "admin"
-          ingress:
-            enabled: false
-          sidecar:
-            dashboards:
-              enabled: true
-              searchNamespace: ALL
-          defaultDashboardsEnabled: true
-          defaultDashboardsTimezone: "UTC"
-          # Disable problematic Node Exporter dashboard that's too large
-          dashboardProviders:
-            dashboardproviders.yaml:
-              apiVersion: 1
-              providers:
-                - name: default
-                  orgId: 1
-                  folder: ""
-                  type: file
-                  disableDeletion: false
-                  editable: false
-                  options:
-                    path: /var/lib/grafana/dashboards/default
-          dashboards:
-            default:
-              node-exporter-full:
-                # Disable the problematic dashboard to avoid ConfigMap size limit
-                enabled: false
-          
+          enabled: false
         # Alert manager for handling notifications
         alertmanager:
           enabled: true
